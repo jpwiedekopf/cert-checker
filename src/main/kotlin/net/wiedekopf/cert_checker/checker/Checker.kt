@@ -53,15 +53,20 @@ class Checker {
         }
     }
 
-    suspend fun checkHost(endpoint: Endpoint, onResult: (ChainCheckResult) -> Unit) {
-        return checkHost(endpoint.name, endpoint.port, onResult)
+    suspend fun checkHost(endpoint: Endpoint, onResult: (ChainCheckResult) -> Unit, onError: (CheckError) -> Unit) {
+        return checkHost(hostname = endpoint.name, port = endpoint.port, onResult = onResult, onError = onError)
     }
 
-    private suspend fun checkHost(hostname: String, port: Int, onResult: (ChainCheckResult) -> Unit) {
+    private suspend fun checkHost(hostname: String, port: Int, onResult: (ChainCheckResult) -> Unit, onError: (CheckError) -> Unit) {
         val client = getClient(hostname, onResult)
         val endpointUri = "https://$hostname:$port"
-        val result = client.get(endpointUri)
-        logger.info { "Got result with status code ${result.status} for $endpointUri" }
+        try {
+            val result = client.get(endpointUri)
+            logger.info { "Got result with status code ${result.status} for $endpointUri" }
+        } catch (e: Exception) {
+            logger.error(e) { "Error while fetching $endpointUri" }
+            onError(CheckError(e, hostname, port.toString()))
+        }
     }
 
     private fun extractCertificateData(chain: List<X509Certificate>, authType: String?, hostname: String): ChainCheckResult {
@@ -114,6 +119,15 @@ class Checker {
             }
         }
     }
+}
+
+class CheckError(
+    private val e: Exception,
+    val host: String,
+    val port: String
+) {
+    val message get() = e.message
+    val errorClass = e::class.simpleName
 }
 
 private fun List<String>?.matches(hostname: String): Boolean {

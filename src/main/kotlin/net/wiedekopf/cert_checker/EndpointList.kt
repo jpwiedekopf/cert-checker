@@ -1,15 +1,18 @@
 package net.wiedekopf.cert_checker
 
-
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.MaterialTheme.colors
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -22,16 +25,19 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.*
 import net.wiedekopf.cert_checker.checker.ChainCheckResult
+import net.wiedekopf.cert_checker.checker.CheckError
 import net.wiedekopf.cert_checker.checker.Checker
 import net.wiedekopf.cert_checker.model.Endpoint
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
-import kotlin.math.exp
 import kotlin.math.roundToInt
 
 private val logger = KotlinLogging.logger {}
@@ -42,16 +48,17 @@ fun ColumnScope.EndpointList(
     checker: Checker,
     coroutineScope: CoroutineScope,
     onChangeDb: () -> Unit,
+    onShowError: (CharSequence) -> Unit,
     changeCounter: Int
 ) {
     val allEndpoints = remember {
         mutableStateListOf<Endpoint>()
     }
-    var resultData by remember {
-        mutableStateOf<ChainCheckResult?>(null)
+    var detailsData by remember {
+        mutableStateOf<Pair<Endpoint, String>?>(null)
     }
-    val onDismissResultAlert = {
-        resultData = null
+    val onDismissDetailsData = {
+        detailsData = null
     }
 
     val candidateForDeletion = remember {
@@ -77,8 +84,9 @@ fun ColumnScope.EndpointList(
         )
     }
 
-    if (resultData != null) {
-        ResultDataDialog(resultData, onDismissResultAlert)
+    if (detailsData != null) {
+        val (endpoint, result) = detailsData!!
+        ResultDataDialog(endpoint = endpoint, certificateInfo = result, onDismiss = onDismissDetailsData)
     }
     LaunchedEffect(changeCounter) {
         allEndpoints.clear()
@@ -92,14 +100,38 @@ fun ColumnScope.EndpointList(
     }
     val listState = rememberLazyListState()
 
+    val createError: (CheckError) -> Unit = {
+        onShowError(buildAnnotatedString {
+            append("Error checking endpoint ")
+            withStyle(style = SpanStyle(fontFamily = FontFamily.Monospace)) {
+                append("${it.host}:${it.port}")
+            }
+            appendLine(":")
+            if (it.errorClass != null) {
+                append(it.errorClass)
+                append(" — ")
+            }
+            appendLine(it.message ?: "Unknown error")
+        })
+    }
+
     LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), state = listState) {
         item {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Button(
                     onClick = {
-                        checkAllEndpoints(allEndpoints = allEndpoints, checker = checker, coroutineScope = coroutineScope) {
-
-                        }
+                        checkAllEndpoints(
+                            allEndpoints = allEndpoints,
+                            checker = checker,
+                            coroutineScope = coroutineScope,
+                            onCheckResult = { endpoint, result ->
+                                if (result.clientCert != null) {
+                                    result.clientCert.writeToDb(endpoint)
+                                    onChangeDb()
+                                }
+                            },
+                            onError = createError
+                        )
                     },
                     modifier = Modifier.fillMaxWidth(0.5f),
                     colors = ButtonDefaults.buttonColors(containerColor = colors.secondary, contentColor = colors.onSecondary),
@@ -116,13 +148,15 @@ fun ColumnScope.EndpointList(
                 endpoint = endpoint,
                 onCheckClick = { ep ->
                     coroutineScope.launch {
-                        checker.checkHost(ep) {
-                            resultData = it
-                            if (it.clientCert != null) {
-                                it.clientCert.writeToDb(endpoint)
-                                onChangeDb()
-                            }
-                        }
+                        checker.checkHost(
+                            ep, onResult = {
+                                if (it.clientCert != null) {
+                                    it.clientCert.writeToDb(endpoint)
+                                    onChangeDb()
+                                }
+                            },
+                            onError = createError
+                        )
                     }
                 },
                 displayedInstant = displayedInstant,
@@ -130,7 +164,12 @@ fun ColumnScope.EndpointList(
                     candidateForDeletion.value = it
                 },
                 onClickShowDetails = {
-                    //detailsData.value = endpoint
+                    detailsData = transaction {
+                        val details = it.details.firstOrNull()?.certificateInfo
+                        return@transaction details?.let {
+                            Pair(endpoint, details)
+                        }
+                    }
                 }
             )
             if (index < allEndpoints.size - 1) {
@@ -144,38 +183,53 @@ fun checkAllEndpoints(
     allEndpoints: SnapshotStateList<Endpoint>,
     coroutineScope: CoroutineScope,
     checker: Checker,
-    onCheckResult: (ChainCheckResult) -> Unit
+    onCheckResult: (Endpoint, ChainCheckResult) -> Unit,
+    onError: (CheckError) -> Unit
 ) {
     allEndpoints.forEach { ep ->
         logger.info { "Checking endpoint ${ep.name}:${ep.port}" }
         coroutineScope.launch {
-            checker.checkHost(endpoint = ep, onResult = onCheckResult)
+            checker.checkHost(endpoint = ep, onResult = {
+                onCheckResult(ep, it)
+            }, onError = onError)
         }
     }
 }
 
 @Composable
-private fun ResultDataDialog(resultData: ChainCheckResult?, onDismissResultAlert: () -> Unit) {
-    AlertDialog(
-        icon = {
-            Icon(Icons.Default.Check, contentDescription = null, tint = colors.secondary)
-        },
-        title = {
-            Text(text = "Check result")
-        },
-        text = {
-            Text(text = resultData!!.clientCert?.certificateInfo ?: "No client cert found")
-        },
-        onDismissRequest = onDismissResultAlert,
-        confirmButton = {
-            TextButton(
-                onClick = onDismissResultAlert
+private fun ResultDataDialog(endpoint: Endpoint, certificateInfo: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true, usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
             ) {
-                Text("OK")
+                Text("${endpoint.name}:${endpoint.port}", style = MaterialTheme.typography.headlineSmall)
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    SelectionContainer {
+                        Text(
+                            text = certificateInfo,
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            maxLines = Int.MAX_VALUE,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+                        )
+
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    Button(onClick = onDismiss) {
+                        Text("OK")
+                    }
+                }
             }
-        },
-        dismissButton = null
-    )
+        }
+    }
 }
 
 @Composable
@@ -225,6 +279,13 @@ fun EndpointListItem(
             endpoint.details.firstOrNull()
         })
     }
+    var buttonContentState by remember { mutableStateOf(ButtonContentState.TEXT) }
+    LaunchedEffect(buttonContentState) {
+        if (buttonContentState == ButtonContentState.DONE) {
+            delay(2000)
+            buttonContentState = ButtonContentState.TEXT
+        }
+    }
     Column(
         modifier = Modifier.fillMaxWidth().padding(8.dp),
         horizontalAlignment = Alignment.Start
@@ -249,10 +310,27 @@ fun EndpointListItem(
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            Button(onClick = {
-                onCheckClick(endpoint)
-            }) {
-                Text("Check")
+            OutlinedButton(
+                onClick = {
+                    onCheckClick(endpoint)
+                    buttonContentState = ButtonContentState.DONE
+                },
+                modifier = Modifier.width(100.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Crossfade(buttonContentState) { fadedValue ->
+                        when (fadedValue) {
+                            ButtonContentState.TEXT -> Text("Check")
+                            ButtonContentState.DONE -> Icon(Icons.Default.Done, contentDescription = "Done", tint = colors.secondary)
+                        }
+                    }
+                }
+
             }
             OutlinedButton(
                 onClick = {
@@ -370,4 +448,9 @@ fun expiryPercent(notBefore: Instant, notAfter: Instant, now: Instant): Float {
     val total = notAfter.daysUntil(notBefore, TimeZone.UTC)
     val remaining = notAfter.daysUntil(now, TimeZone.UTC)
     return (remaining.toFloat() / total.toFloat())
+}
+
+enum class ButtonContentState {
+    TEXT,
+    DONE
 }
