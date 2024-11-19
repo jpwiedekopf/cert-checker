@@ -1,3 +1,5 @@
+@file:Suppress("FunctionName")
+
 package net.wiedekopf.cert_checker
 
 import androidx.compose.foundation.*
@@ -71,9 +73,12 @@ fun ColumnScope.EndpointList(
             endpoint = candidateForDeletion.value!!,
             onDelete = {
                 transaction(db) {
+                    val deleted = candidateForDeletion.value!!.details.onEach {
+                        it.delete()
+                    }
                     candidateForDeletion.value!!.delete()
+                    logger.warn { "Deleted entity with ID ${candidateForDeletion.value!!.id.value} and ${deleted.count()} certificate entrie(-s)" }
                 }
-                logger.warn { "Deleted entity with ID ${candidateForDeletion.value!!.id.value}" }
                 onChangeDb()
             },
             onDismiss = {

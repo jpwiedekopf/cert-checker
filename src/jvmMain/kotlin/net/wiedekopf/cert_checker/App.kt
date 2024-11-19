@@ -17,6 +17,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
+@Suppress("FunctionName")
 @Composable
 fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineScope, toggleDarkTheme: () -> Unit, isDarkTheme: Boolean) {
     MaterialTheme {
@@ -56,31 +57,49 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
             mutableStateOf(SortMode.EXPIRY)
         }
 
-        LaunchedEffect(changeCounter, sortMode) {
+        var currentSearch by remember {
+            mutableStateOf<String?>(null)
+        }
+
+        val currentEndpoints = remember {
+            mutableStateListOf<Endpoint>()
+        }
+
+        LaunchedEffect(changeCounter) {
             allEndpoints.clear()
             transaction(db) {
-                val endpointList = Endpoint.all().toList().sortedWith { o1, o2 ->
-                    if (o1 == null || o2 == null) {
-                        return@sortedWith 0
-                    }
-                    when (sortMode) {
-                        SortMode.ID -> o1.id.value.compareTo(o2.id.value)
-                        SortMode.ALPHABETIC -> o1.name.compareTo(o2.name)
-                        SortMode.EXPIRY -> {
-                            val sortAfter1 = o1.details.firstOrNull()?.notAfter
-                            val sortAfter2 = o2.details.firstOrNull()?.notAfter
-                            if (sortAfter1 == null || sortAfter2 == null) {
-                                return@sortedWith 0
-                            }
-                            sortAfter1.compareTo(sortAfter2)
-                        }
-                    }
-                }
+                val endpointList = Endpoint.all().toList()
                 logger.info {
                     "Loaded ${endpointList.size} endpoints from DB"
                 }
                 allEndpoints.addAll(endpointList)
             }
+        }
+
+        LaunchedEffect(allEndpoints, changeCounter, currentSearch, sortMode) {
+            val filteredList = allEndpoints.filter {
+                currentSearch == null || it.name.contains(currentSearch!!, ignoreCase = true)
+            }
+            @Suppress("UNNECESSARY_SAFE_CALL") val sortedList = filteredList.sortedWith { o1, o2 ->
+                if (o1 == null || o2 == null) {
+                    return@sortedWith 0
+                }
+                when (sortMode) {
+                    SortMode.ID -> o1.id.value.compareTo(o2.id.value)
+                    SortMode.ALPHABETIC -> o1.name.compareTo(o2.name)
+                    SortMode.EXPIRY -> {
+                        val sortAfter1 = o1.details?.firstOrNull()?.notAfter
+                        val sortAfter2 = o2.details?.firstOrNull()?.notAfter
+                        if (sortAfter1 == null || sortAfter2 == null) {
+                            return@sortedWith 0
+                        }
+                        sortAfter1.compareTo(sortAfter2)
+                    }
+                }
+            }
+            currentEndpoints.clear()
+            currentEndpoints.addAll(sortedList)
+            logger.debug { "Filtered ${allEndpoints.size} endpoints to ${currentEndpoints.size} endpoints" }
         }
 
         TopUi(
@@ -91,8 +110,11 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
             isDarkTheme = isDarkTheme,
             coroutineScope = coroutineScope,
             checker = checker,
-            allEndpoints = allEndpoints,
+            endpointList = allEndpoints,
             sortMode = sortMode,
+            changeSearch = {
+                currentSearch = it
+            },
             onClickSort = {
                 val ordinal = sortMode.ordinal
                 sortMode = SortMode.entries.toTypedArray()[(ordinal + 1) % SortMode.entries.size]
@@ -101,7 +123,7 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
         EndpointList(
             db = db,
             checker = checker,
-            allEndpoints = allEndpoints,
+            allEndpoints = currentEndpoints,
             coroutineScope = coroutineScope,
             onChangeDb = onChangeDb,
             onShowError = {

@@ -2,6 +2,7 @@ package net.wiedekopf.cert_checker
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,7 +17,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
@@ -35,17 +35,19 @@ import java.lang.Thread.sleep
 
 private val logger = KotlinLogging.logger {}
 
+@Suppress("FunctionName")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopUi(
     database: Database,
-    allEndpoints: SnapshotStateList<Endpoint>,
+    endpointList: SnapshotStateList<Endpoint>,
     checker: Checker,
     onChangeDb: () -> Unit,
     focusRequester: FocusRequester,
     coroutineScope: CoroutineScope,
     toggleDarkTheme: () -> Unit,
     onClickSort: () -> Unit,
+    changeSearch: (String?) -> Unit,
     sortMode: SortMode,
     isDarkTheme: Boolean
 ) {
@@ -101,15 +103,14 @@ fun TopUi(
     ) {
         TextField(
             value = endpointHostname.value,
-            onValueChange = { endpointHostname.value = it },
-            label = {
-                Text(
-                    "Hostname",
-                    style = TextStyle(color = if (hostnameIsError(endpointHostname.value)) colorScheme.error else colorScheme.onPrimaryContainer)
-                )
+            onValueChange = {
+                endpointHostname.value = it
+                changeSearch(it)
             },
-            modifier = Modifier.weight(0.6f).focusRequester(focusRequester).focusTarget(),
-            isError = endpointHostname.value.isNotBlank() && hostnameIsError(endpointHostname.value)
+            label = {
+                Text("Hostname")
+            },
+            modifier = Modifier.weight(0.6f).focusRequester(focusRequester).focusable(),
         )
         TextField(
             value = endpointPort.value,
@@ -117,7 +118,7 @@ fun TopUi(
                 endpointPort.value = it
             },
             label = { Text("Port") },
-            modifier = Modifier.width(100.dp).focusRequester(focusRequester).focusTarget(),
+            modifier = Modifier.width(100.dp).focusRequester(focusRequester).focusable(),
             isError = endpointPort.value.isNotBlank() && portIsError(endpointPort.value)
         )
         Button(
@@ -149,7 +150,9 @@ fun TopUi(
                 disabledContentColor = colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
             ),
             modifier = Modifier.width(IntrinsicSize.Min).focusRequester(focusRequester).focusTarget(),
-            enabled = !hostnameIsError(endpointHostname.value) && !portIsError(endpointPort.value)
+            enabled = !hostnameIsError(endpointHostname.value) && !portIsError(endpointPort.value) && endpointList.none {
+                it.port == endpointPort.value.toInt() && it.name == endpointHostname.value
+            }
         ) {
             Text("Add")
         }
@@ -158,7 +161,7 @@ fun TopUi(
                 checkAllProgress = 0
                 coroutineScope.launch {
                     onRequestCheckAll(
-                        allEndpoints = allEndpoints,
+                        allEndpoints = endpointList,
                         checker = checker,
                         onChangeDb = onChangeDb,
                         onError = {
@@ -181,7 +184,7 @@ fun TopUi(
                 }
             },
             colors = ButtonDefaults.buttonColors(containerColor = colorScheme.secondary, contentColor = colorScheme.onSecondary),
-            enabled = allEndpoints.isNotEmpty()
+            enabled = endpointList.isNotEmpty()
         ) {
             Text("Check all")
         }
@@ -222,11 +225,17 @@ fun TopUi(
             )
         }
     }
-    if (checkAllProgress != null) {
-        LinearProgressIndicator(
-            progress = { checkAllProgress?.toFloat()?.div(allEndpoints.size) ?: 1f },
-            modifier = Modifier.fillMaxWidth()
-        )
+    when {
+        checkAllProgress != null -> {
+            LinearProgressIndicator(
+                progress = { checkAllProgress?.toFloat()?.div(endpointList.size) ?: 1f },
+                modifier = Modifier.fillMaxWidth().padding(2.dp).height(6.dp)
+            )
+        }
+
+        else -> {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
     }
 }
 

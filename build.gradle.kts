@@ -28,6 +28,11 @@ kotlin {
     jvmToolchain(21)
 
     sourceSets {
+        commonMain {
+            dependencies {
+                implementation("com.willowtreeapps:fuzzywuzzy-kotlin:0.1.1")
+            }
+        }
         val jvmMain: KotlinSourceSet by getting {
             dependencies {
                 implementation(kotlin("stdlib-jdk8"))
@@ -35,6 +40,7 @@ kotlin {
                 implementation(compose.material3)
                 implementation(compose.materialIconsExtended)
 
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime-jvm:0.6.1")
                 implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
                 implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
                 implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
@@ -47,7 +53,6 @@ kotlin {
                 implementation("io.ktor:ktor-client-core:$ktorVersion")
                 implementation("io.ktor:ktor-client-cio:$ktorVersion")
                 implementation("io.ktor:ktor-client-logging:$ktorVersion")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime-jvm:0.6.1")
 
                 // Conveyor API: Manage automatic updates.
                 implementation("dev.hydraulic.conveyor:conveyor-control:1.1")
