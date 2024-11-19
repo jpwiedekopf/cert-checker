@@ -26,9 +26,12 @@ import kotlin.io.path.notExists
 
 private val logger = KotlinLogging.logger {}
 
+const val STORAGE_VERSION = "1.0.0"
+
 fun main() = application {
+    val version = System.getProperty("app.version") ?: "Development"
     val appDir = remember {
-        AppDirsFactory.getInstance().getUserDataDir("cert-checker", "1.0.0", "Wiedekopf").let {
+        AppDirsFactory.getInstance().getUserDataDir("cert-checker", STORAGE_VERSION, "Wiedekopf").let {
             Path.of(it)
         }
     }
@@ -44,7 +47,12 @@ fun main() = application {
         mutableStateOf(true)
     }
 
-    Window(onCloseRequest = ::exitApplication, title = "Cert Checker") {
+    Window(onCloseRequest = ::exitApplication, title = buildString {
+        append("Cert Checker")
+        if (version != "Development") {
+            append(" v$version")
+        }
+    }) {
         AppTheme(darkTheme = isDarkTheme) {
             Column(modifier = Modifier.fillMaxSize().background(colorScheme.surfaceBright).padding(4.dp)) {
                 CompositionLocalProvider(LocalContentColor provides colorScheme.onSurface) {
