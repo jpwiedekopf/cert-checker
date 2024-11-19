@@ -4,10 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -17,17 +21,23 @@ import net.harawata.appdirs.AppDirsFactory
 import net.wiedekopf.cert_checker.checker.Checker
 import net.wiedekopf.cert_checker.model.CertificateDetailsTable
 import net.wiedekopf.cert_checker.model.EndpointTable
+import org.jetbrains.compose.resources.ExperimentalResourceApi
+import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
 private val logger = KotlinLogging.logger {}
 
 const val STORAGE_VERSION = "1.0.0"
 
+@OptIn(ExperimentalResourceApi::class)
 fun main() = application {
     val version = System.getProperty("app.version") ?: "Development"
     val appDir = remember {
@@ -47,12 +57,25 @@ fun main() = application {
         mutableStateOf(true)
     }
 
-    Window(onCloseRequest = ::exitApplication, title = buildString {
-        append("Cert Checker")
-        if (version != "Development") {
-            append(" v$version")
-        }
-    }) {
+    val appIcon = remember {
+        System.getProperty("app.dir")
+            ?.let { Paths.get(it, "icon-512.png") }
+            ?.takeIf { it.exists() }
+            ?.inputStream()
+            ?.buffered()
+            ?.use { BitmapPainter(it.readAllBytes().decodeToImageBitmap()) }
+    }
+
+    Window(
+        onCloseRequest = ::exitApplication,
+        title = buildString {
+            append("Cert Checker")
+            if (version != "Development") {
+                append(" v$version")
+            }
+        },
+        icon = appIcon
+    ) {
         AppTheme(darkTheme = isDarkTheme) {
             Column(modifier = Modifier.fillMaxSize().background(colorScheme.surfaceBright).padding(4.dp)) {
                 CompositionLocalProvider(LocalContentColor provides colorScheme.onSurface) {

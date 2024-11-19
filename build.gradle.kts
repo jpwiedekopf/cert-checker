@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "net.wiedekopf"
-version = "1.0.0"
+version = "1.0.1"
 
 repositories {
     mavenCentral()
@@ -39,6 +39,7 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(compose.material3)
                 implementation(compose.materialIconsExtended)
+                implementation(compose.components.resources)
 
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime-jvm:0.6.1")
                 implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
