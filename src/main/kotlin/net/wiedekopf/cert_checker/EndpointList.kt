@@ -1,19 +1,18 @@
 package net.wiedekopf.cert_checker
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.MaterialTheme.colors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -30,11 +29,8 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.datetime.*
-import net.wiedekopf.cert_checker.checker.ChainCheckResult
-import net.wiedekopf.cert_checker.checker.CheckError
-import net.wiedekopf.cert_checker.checker.Checker
+import net.wiedekopf.cert_checker.checker.*
 import net.wiedekopf.cert_checker.model.Endpoint
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -49,11 +45,9 @@ fun ColumnScope.EndpointList(
     coroutineScope: CoroutineScope,
     onChangeDb: () -> Unit,
     onShowError: (CharSequence) -> Unit,
-    changeCounter: Int
+    changeCounter: Int,
+    allEndpoints: SnapshotStateList<Endpoint>
 ) {
-    val allEndpoints = remember {
-        mutableStateListOf<Endpoint>()
-    }
     var detailsData by remember {
         mutableStateOf<Pair<Endpoint, String>?>(null)
     }
@@ -88,16 +82,6 @@ fun ColumnScope.EndpointList(
         val (endpoint, result) = detailsData!!
         ResultDataDialog(endpoint = endpoint, certificateInfo = result, onDismiss = onDismissDetailsData)
     }
-    LaunchedEffect(changeCounter) {
-        allEndpoints.clear()
-        transaction(db) {
-            val endpointList = Endpoint.all().toList()
-            logger.info {
-                "Loaded ${endpointList.size} endpoints from DB"
-            }
-            allEndpoints.addAll(endpointList)
-        }
-    }
     val listState = rememberLazyListState()
 
     val createError: (CheckError) -> Unit = {
@@ -115,86 +99,54 @@ fun ColumnScope.EndpointList(
         })
     }
 
-    LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), state = listState) {
-        item {
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Button(
-                    onClick = {
-                        checkAllEndpoints(
-                            allEndpoints = allEndpoints,
+    Row(modifier = Modifier.fillMaxWidth().weight(1f, fill = true)) {
+        LazyColumn(modifier = Modifier.fillMaxHeight().weight(1f), state = listState) {
+            itemsIndexed(allEndpoints.toList()) { index, endpoint ->
+                EndpointListItem(
+                    index = index,
+                    endpoint = endpoint,
+                    onCheckClick = {
+                        onRequestCheck(
                             checker = checker,
                             coroutineScope = coroutineScope,
-                            onCheckResult = { endpoint, result ->
-                                if (result.clientCert != null) {
-                                    result.clientCert.writeToDb(endpoint)
-                                    onChangeDb()
-                                }
-                            },
+                            endpoint = endpoint,
+                            onChangeDb = onChangeDb,
                             onError = createError
                         )
                     },
-                    modifier = Modifier.fillMaxWidth(0.5f),
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.secondary, contentColor = colors.onSecondary),
-                    enabled = allEndpoints.isNotEmpty()
-                ) {
-                    Text("Check all")
-                }
-                HorizontalDivider(thickness = 3.dp, color = colors.secondary)
-            }
-        }
-        itemsIndexed(allEndpoints.toList()) { index, endpoint ->
-            EndpointListItem(
-                index = index,
-                endpoint = endpoint,
-                onCheckClick = { ep ->
-                    coroutineScope.launch {
-                        checker.checkHost(
-                            ep, onResult = {
-                                if (it.clientCert != null) {
-                                    it.clientCert.writeToDb(endpoint)
-                                    onChangeDb()
-                                }
-                            },
-                            onError = createError
-                        )
-                    }
-                },
-                displayedInstant = displayedInstant,
-                onClickDelete = {
-                    candidateForDeletion.value = it
-                },
-                onClickShowDetails = {
-                    detailsData = transaction {
-                        val details = it.details.firstOrNull()?.certificateInfo
-                        return@transaction details?.let {
-                            Pair(endpoint, details)
+                    displayedInstant = displayedInstant,
+                    onClickDelete = {
+                        candidateForDeletion.value = it
+                    },
+                    onClickShowDetails = {
+                        detailsData = transaction {
+                            val details = it.details.firstOrNull()?.certificateInfo
+                            return@transaction details?.let {
+                                Pair(endpoint, details)
+                            }
                         }
                     }
+                )
+                if (index < allEndpoints.size - 1) {
+                    HorizontalDivider(thickness = 3.dp, color = colorScheme.secondary)
                 }
-            )
-            if (index < allEndpoints.size - 1) {
-                HorizontalDivider(thickness = 3.dp, color = colors.primary)
             }
         }
+        VerticalScrollbar(
+            modifier = Modifier.width(16.dp).padding(4.dp).fillMaxHeight(),
+            adapter = rememberScrollbarAdapter(listState),
+            style = ScrollbarStyle(
+                minimalHeight = 16.dp,
+                thickness = 4.dp,
+                shape = RoundedCornerShape(8.dp),
+                hoverColor = colorScheme.secondary.copy(alpha = 0.5f),
+                unhoverColor = colorScheme.secondary.copy(alpha = 0.3f),
+                hoverDurationMillis = 1000
+            )
+        )
     }
 }
 
-fun checkAllEndpoints(
-    allEndpoints: SnapshotStateList<Endpoint>,
-    coroutineScope: CoroutineScope,
-    checker: Checker,
-    onCheckResult: (Endpoint, ChainCheckResult) -> Unit,
-    onError: (CheckError) -> Unit
-) {
-    allEndpoints.forEach { ep ->
-        logger.info { "Checking endpoint ${ep.name}:${ep.port}" }
-        coroutineScope.launch {
-            checker.checkHost(endpoint = ep, onResult = {
-                onCheckResult(ep, it)
-            }, onError = onError)
-        }
-    }
-}
 
 @Composable
 private fun ResultDataDialog(endpoint: Endpoint, certificateInfo: String, onDismiss: () -> Unit) {
@@ -236,7 +188,7 @@ private fun ResultDataDialog(endpoint: Endpoint, certificateInfo: String, onDism
 fun ConfirmDeleteDialog(endpoint: Endpoint, onDelete: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         icon = {
-            Icon(Icons.Default.Delete, contentDescription = null, tint = colors.error)
+            Icon(Icons.Default.Delete, contentDescription = null, tint = colorScheme.error)
         },
         title = {
             Text("Delete endpoint?")
@@ -252,7 +204,7 @@ fun ConfirmDeleteDialog(endpoint: Endpoint, onDelete: () -> Unit, onDismiss: () 
                     onDismiss()
                 }
             ) {
-                Text("Delete", color = colors.error, fontWeight = FontWeight.Bold)
+                Text("Delete", color = colorScheme.error, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -292,57 +244,59 @@ fun EndpointListItem(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "${index + 1}.")
-            Text(text = "Name:")
-            SelectionContainer {
-                Text(text = buildAnnotatedString {
-                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)) {
-                        append(endpoint.name)
-                    }
-                    append(":")
-                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(endpoint.port.toString())
-                    }
-                })
+            Row {
+                Text(text = "${index + 1}.")
+                Text(text = "Name:")
+                SelectionContainer {
+                    Text(text = buildAnnotatedString {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)) {
+                            append(endpoint.name)
+                        }
+                        append(":")
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(endpoint.port.toString())
+                        }
+                    })
+                }
             }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            OutlinedButton(
-                onClick = {
-                    onCheckClick(endpoint)
-                    buttonContentState = ButtonContentState.DONE
-                },
-                modifier = Modifier.width(100.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+            Row {
+                OutlinedButton(
+                    onClick = {
+                        onCheckClick(endpoint)
+                        buttonContentState = ButtonContentState.DONE
+                    },
+                    modifier = Modifier.width(100.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Crossfade(buttonContentState) { fadedValue ->
-                        when (fadedValue) {
-                            ButtonContentState.TEXT -> Text("Check")
-                            ButtonContentState.DONE -> Icon(Icons.Default.Done, contentDescription = "Done", tint = colors.secondary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Crossfade(buttonContentState) { fadedValue ->
+                            when (fadedValue) {
+                                ButtonContentState.TEXT -> Text("Check")
+                                ButtonContentState.DONE -> Icon(Icons.Default.Done, contentDescription = "Done", tint = colorScheme.secondary)
+                            }
                         }
                     }
-                }
 
-            }
-            OutlinedButton(
-                onClick = {
-                    onClickShowDetails(endpoint)
                 }
-            ) {
-                Text("View details")
-            }
-            IconButton(onClick = {
-                onClickDelete(endpoint)
-            }) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = colors.error)
+                OutlinedButton(
+                    onClick = {
+                        onClickShowDetails(endpoint)
+                    }
+                ) {
+                    Text("View details")
+                }
+                IconButton(onClick = {
+                    onClickDelete(endpoint)
+                }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = colorScheme.error)
+                }
             }
         }
         if (endpointDetailsState != null) {
@@ -385,7 +339,7 @@ fun EndpointListItem(
                 Text(buildAnnotatedString {
                     append(expiryPercent.times(100).roundToInt().toString())
                     append("% expired")
-                    withStyle(style = SpanStyle(color = colors.error)) {
+                    withStyle(style = SpanStyle(color = colorScheme.error)) {
                         when {
                             expiryPercent >= 0.5f && expiryPercent < 0.75f -> append(" (!)")
                             expiryPercent >= 0.75f -> append(" (!!!)")
@@ -398,9 +352,9 @@ fun EndpointListItem(
                     },
                     modifier = Modifier.weight(1f),
                     color = when {
-                        expiryPercent < 0.5f -> colors.primary
-                        expiryPercent < 0.75f -> colors.error.copy(alpha = 0.5f)
-                        else -> colors.error
+                        expiryPercent < 0.5f -> colorScheme.primary
+                        expiryPercent < 0.75f -> colorScheme.error.copy(alpha = 0.5f)
+                        else -> colorScheme.error
                     }
                 )
             }
@@ -447,7 +401,7 @@ fun Instant.formatDeltaDays(from: Instant): String {
 fun expiryPercent(notBefore: Instant, notAfter: Instant, now: Instant): Float {
     val total = notAfter.daysUntil(notBefore, TimeZone.UTC)
     val remaining = notAfter.daysUntil(now, TimeZone.UTC)
-    return (remaining.toFloat() / total.toFloat())
+    return 1f - (remaining.toFloat() / total.toFloat())
 }
 
 enum class ButtonContentState {

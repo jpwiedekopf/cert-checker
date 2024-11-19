@@ -1,10 +1,13 @@
 package net.wiedekopf.cert_checker.checker
 
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.toKotlinInstant
@@ -178,3 +181,40 @@ data class ChainCheckResult(
     val clientCert: SingleCheckResult?,
     val chain: List<SingleCheckResult>
 )
+
+fun onRequestCheck(
+    checker: Checker,
+    coroutineScope: CoroutineScope,
+    endpoint: Endpoint,
+    onChangeDb: () -> Unit,
+    onError: (CheckError) -> Unit,
+    onResult: ((ChainCheckResult) -> Unit)? = null
+) {
+    coroutineScope.launch {
+        checker.checkHost(
+            endpoint = endpoint,
+            onResult = {
+                if (it.clientCert != null) {
+                    it.clientCert.writeToDb(endpoint)
+                    onChangeDb()
+                }
+                onResult?.invoke(it)
+            },
+            onError = onError
+        )
+    }
+}
+
+fun onRequestCheckAll(
+    allEndpoints: SnapshotStateList<Endpoint>,
+    coroutineScope: CoroutineScope,
+    checker: Checker,
+    onChangeDb: () -> Unit,
+    onError: (CheckError) -> Unit,
+    onResult: ((ChainCheckResult) -> Unit)? = null
+) {
+    allEndpoints.forEach { ep ->
+        logger.info { "Checking endpoint ${ep.name}:${ep.port}" }
+        onRequestCheck(checker, coroutineScope, ep, onChangeDb, onError, onResult)
+    }
+}
