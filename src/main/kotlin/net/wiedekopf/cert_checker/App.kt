@@ -11,6 +11,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import net.wiedekopf.cert_checker.checker.Checker
 import net.wiedekopf.cert_checker.model.Endpoint
+import net.wiedekopf.cert_checker.model.SortMode
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 
@@ -51,10 +52,30 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
             mutableStateListOf<Endpoint>()
         }
 
-        LaunchedEffect(changeCounter) {
+        var sortMode by remember {
+            mutableStateOf(SortMode.EXPIRY)
+        }
+
+        LaunchedEffect(changeCounter, sortMode) {
             allEndpoints.clear()
             transaction(db) {
-                val endpointList = Endpoint.all().toList()
+                val endpointList = Endpoint.all().toList().sortedWith { o1, o2 ->
+                    if (o1 == null || o2 == null) {
+                        return@sortedWith 0
+                    }
+                    when (sortMode) {
+                        SortMode.ID -> o1.id.value.compareTo(o2.id.value)
+                        SortMode.ALPHABETIC -> o1.name.compareTo(o2.name)
+                        SortMode.EXPIRY -> {
+                            val sortAfter1 = o1.details.firstOrNull()?.notAfter
+                            val sortAfter2 = o2.details.firstOrNull()?.notAfter
+                            if (sortAfter1 == null || sortAfter2 == null) {
+                                return@sortedWith 0
+                            }
+                            sortAfter1.compareTo(sortAfter2)
+                        }
+                    }
+                }
                 logger.info {
                     "Loaded ${endpointList.size} endpoints from DB"
                 }
@@ -70,7 +91,12 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
             isDarkTheme = isDarkTheme,
             coroutineScope = coroutineScope,
             checker = checker,
-            allEndpoints = allEndpoints
+            allEndpoints = allEndpoints,
+            sortMode = sortMode,
+            onClickSort = {
+                val ordinal = sortMode.ordinal
+                sortMode = SortMode.entries.toTypedArray()[(ordinal + 1) % SortMode.entries.size]
+            }
         )
         EndpointList(
             db = db,

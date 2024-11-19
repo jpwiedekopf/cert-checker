@@ -1,34 +1,41 @@
 package net.wiedekopf.cert_checker
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.*
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import net.wiedekopf.cert_checker.checker.Checker
 import net.wiedekopf.cert_checker.checker.onRequestCheck
 import net.wiedekopf.cert_checker.checker.onRequestCheckAll
 import net.wiedekopf.cert_checker.model.Endpoint
 import net.wiedekopf.cert_checker.model.EndpointTable
+import net.wiedekopf.cert_checker.model.SortMode
 import org.apache.commons.validator.routines.DomainValidator
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.lang.Thread.sleep
 
 private val logger = KotlinLogging.logger {}
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TopUi(
     database: Database,
@@ -38,46 +45,42 @@ fun TopUi(
     focusRequester: FocusRequester,
     coroutineScope: CoroutineScope,
     toggleDarkTheme: () -> Unit,
+    onClickSort: () -> Unit,
+    sortMode: SortMode,
     isDarkTheme: Boolean
 ) {
 
     val endpointHostname = remember { mutableStateOf("") }
     val endpointPort = remember { mutableStateOf("443") }
 
-    var feedbackMessage by remember {
-        mutableStateOf<String?>(null)
-    }
-    var feedbackIsError by remember {
-        mutableStateOf<Boolean?>(null)
+    val feedbackBus = remember {
+        mutableStateListOf<FeedbackMessage>()
     }
 
+    var checkAllProgress: Int? by remember { mutableStateOf(null) }
 
-    if (feedbackIsError != null && feedbackMessage != null) {
-        val icon = when (feedbackIsError!!) {
+    if (feedbackBus.isNotEmpty()) {
+        val ourMessage = feedbackBus.first()
+        val icon = when (ourMessage.isError) {
             true -> Icons.Default.Warning
             else -> Icons.Default.Add
         }
-        val iconColor = when (feedbackIsError!!) {
+        val iconColor = when (ourMessage.isError) {
             true -> colorScheme.error
             else -> colorScheme.primary
         }
-        val title = when (feedbackIsError) {
-            true -> "Error"
-            else -> "Success"
-        }
         val onDismiss: () -> Unit = {
-            feedbackMessage = null
-            feedbackIsError = null
+            feedbackBus.removeFirst()
         }
         AlertDialog(
             icon = {
                 Icon(icon, contentDescription = null, tint = iconColor)
             },
             title = {
-                Text(text = title)
+                Text(text = ourMessage.title)
             },
             text = {
-                Text(text = feedbackMessage!!)
+                Text(text = ourMessage.message)
             },
             onDismissRequest = onDismiss,
             confirmButton = {
@@ -121,13 +124,18 @@ fun TopUi(
             onClick = {
                 val result = addEntryToDb(database, endpointHostname.value, endpointPort.value)
                 if (result.endpoint != null) {
-                    onRequestCheck(checker, coroutineScope, result.endpoint, onChangeDb, onError = {
-                        feedbackMessage = it.message
-                        feedbackIsError = true
-                    })
+                    coroutineScope.launch {
+                        onRequestCheck(checker, result.endpoint, onChangeDb, onError = {
+                            feedbackBus.add(
+                                FeedbackMessage(
+                                    message = "Error checking ${it.host}:${it.port}: ${it.message}",
+                                    isError = true,
+                                    title = "Error"
+                                )
+                            )
+                        })
+                    }
                 }
-                feedbackMessage = result.message
-                feedbackIsError = result.isError
                 if (!result.isError) {
                     endpointHostname.value = ""
                     endpointPort.value = "443"
@@ -147,16 +155,30 @@ fun TopUi(
         }
         Button(
             onClick = {
-                onRequestCheckAll(
-                    allEndpoints = allEndpoints,
-                    coroutineScope = coroutineScope,
-                    checker = checker,
-                    onChangeDb = onChangeDb,
-                    onError = {
-                        feedbackMessage = it.message
-                        feedbackIsError = true
-                    }
-                )
+                checkAllProgress = 0
+                coroutineScope.launch {
+                    onRequestCheckAll(
+                        allEndpoints = allEndpoints,
+                        checker = checker,
+                        onChangeDb = onChangeDb,
+                        onError = {
+                            feedbackBus.add(
+                                FeedbackMessage(
+                                    message = "Error checking ${it.host}:${it.port}: ${it.message}",
+                                    isError = true,
+                                    title = "Error"
+                                )
+                            )
+                        },
+                        onResult = { _ ->
+                            checkAllProgress = checkAllProgress?.let {
+                                it + 1
+                            } ?: 1
+                        }
+                    )
+                    sleep(2000)
+                    checkAllProgress = null
+                }
             },
             colors = ButtonDefaults.buttonColors(containerColor = colorScheme.secondary, contentColor = colorScheme.onSecondary),
             enabled = allEndpoints.isNotEmpty()
@@ -164,19 +186,55 @@ fun TopUi(
             Text("Check all")
         }
         IconButton(
-            onClick = toggleDarkTheme,
-            modifier = Modifier.width(IntrinsicSize.Min)
+            onClick = onClickSort,
+        ) {
+            TooltipArea(tooltip = {
+                Surface(
+                    modifier = Modifier.shadow(4.dp).padding(4.dp),
+                    color = colorScheme.primaryContainer, shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        "Sort mode, currently set to ${sortMode.title}",
+                        color = colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+            }) {
+                Icon(
+                    when (sortMode) {
+                        SortMode.ID -> Icons.Default.FormatListNumbered
+                        SortMode.ALPHABETIC -> Icons.Default.SortByAlpha
+                        SortMode.EXPIRY -> Icons.Default.Event
+                    }, contentDescription = "Sort order", tint = colorScheme.primary
+                )
+            }
+
+        }
+        IconButton(
+            onClick = toggleDarkTheme
         ) {
             Icon(
                 imageVector = when (isDarkTheme) {
                     false -> Icons.Default.DarkMode
                     true -> Icons.Default.LightMode
 
-                }, contentDescription = "Toggle Dark Mode", tint = colorScheme.primary
+                }, contentDescription = "Toggle Dark Mode", tint = colorScheme.inversePrimary
             )
         }
     }
+    if (checkAllProgress != null) {
+        LinearProgressIndicator(
+            progress = { checkAllProgress?.toFloat()?.div(allEndpoints.size) ?: 1f },
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
+
+data class FeedbackMessage(
+    val message: String,
+    val isError: Boolean,
+    val title: String
+)
 
 private fun addEntryToDb(database: Database, hostname: String, port: String): AddResult {
     logger.info { "Adding entry to DB: $hostname:$port" }

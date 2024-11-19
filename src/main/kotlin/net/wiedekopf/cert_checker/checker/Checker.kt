@@ -6,8 +6,6 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.toKotlinInstant
@@ -182,39 +180,37 @@ data class ChainCheckResult(
     val chain: List<SingleCheckResult>
 )
 
-fun onRequestCheck(
+suspend fun onRequestCheck(
     checker: Checker,
-    coroutineScope: CoroutineScope,
     endpoint: Endpoint,
     onChangeDb: () -> Unit,
     onError: (CheckError) -> Unit,
+    notifyDb: Boolean = true,
     onResult: ((ChainCheckResult) -> Unit)? = null
 ) {
-    coroutineScope.launch {
-        checker.checkHost(
-            endpoint = endpoint,
-            onResult = {
-                if (it.clientCert != null) {
-                    it.clientCert.writeToDb(endpoint)
-                    onChangeDb()
-                }
-                onResult?.invoke(it)
-            },
-            onError = onError
-        )
-    }
+    checker.checkHost(
+        endpoint = endpoint,
+        onResult = {
+            if (it.clientCert != null) {
+                it.clientCert.writeToDb(endpoint)
+                if (notifyDb) onChangeDb()
+            }
+            onResult?.invoke(it)
+        },
+        onError = onError
+    )
 }
 
-fun onRequestCheckAll(
+suspend fun onRequestCheckAll(
     allEndpoints: SnapshotStateList<Endpoint>,
-    coroutineScope: CoroutineScope,
     checker: Checker,
     onChangeDb: () -> Unit,
     onError: (CheckError) -> Unit,
-    onResult: ((ChainCheckResult) -> Unit)? = null
+    onResult: ((ChainCheckResult) -> Unit)?
 ) {
     allEndpoints.forEach { ep ->
         logger.info { "Checking endpoint ${ep.name}:${ep.port}" }
-        onRequestCheck(checker, coroutineScope, ep, onChangeDb, onError, onResult)
+        onRequestCheck(checker = checker, endpoint = ep, onChangeDb = onChangeDb, onError = onError, notifyDb = false, onResult = onResult)
     }
+    onChangeDb()
 }
