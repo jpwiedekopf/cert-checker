@@ -10,3 +10,6 @@ care about.
 
 The app uses local storage to store your hosts, and cache the certificate details, so it can also be used to query hosts you have only 
 restricted access to (endpoints that aren't reachable outside of certain networks).
+
+[![Download](https://img.shields.io/badge/download-from_Conveyor-purple?style=for-the-badge&labelColor=blue
+)](https://jpwiedekopf.github.io/cert-checker/download.html)
