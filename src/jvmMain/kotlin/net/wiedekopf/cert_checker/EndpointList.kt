@@ -53,7 +53,8 @@ fun ColumnScope.EndpointList(
     onChangeDb: () -> Unit,
     onShowError: (CharSequence) -> Unit,
     changeCounter: Int,
-    allEndpoints: SnapshotStateList<Endpoint>
+    endpoints: SnapshotStateList<Endpoint>,
+    search: String?
 ) {
     var detailsData by remember {
         mutableStateOf<Pair<Endpoint, String>?>(null)
@@ -108,20 +109,42 @@ fun ColumnScope.EndpointList(
             appendLine(it.message ?: "Unknown error")
         })
     }
+    when {
+        endpoints.isNotEmpty() -> {
+            EndpointListContent(
+                endpoints,
+                displayedInstant,
+                checker,
+                coroutineScope,
+                scrollState,
+                onChangeDb,
+                candidateForDeletion,
+                onShowDetails = { endpoint, detailsString ->
+                    detailsData = endpoint to detailsString
+                },
+                createError
+            )
+        }
 
-    EndpointListContent(
-        allEndpoints,
-        displayedInstant,
-        checker,
-        coroutineScope,
-        scrollState,
-        onChangeDb,
-        candidateForDeletion,
-        onShowDetails = { endpoint, detailsString ->
-            detailsData = endpoint to detailsString
-        },
-        createError
-    )
+        else -> {
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = when (search.isNullOrBlank()) {
+                        true -> "No endpoints available"
+                        else -> "No endpoints found for search query \"$search\""
+                    },
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.error
+                    ),
+                )
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

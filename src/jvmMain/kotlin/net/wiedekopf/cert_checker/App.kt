@@ -79,9 +79,13 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
 
         LaunchedEffect(allEndpoints, changeCounter, currentSearch, sortMode) {
             val filteredList = currentSearch?.let { search ->
-                allEndpoints.filter {
-                    FuzzySearch.partialRatio(search, it.name) > 50
+                when (search.isBlank()) {
+                    true -> allEndpoints
+                    else -> allEndpoints.filter {
+                        FuzzySearch.partialRatio(search, it.name) > 50
+                    }
                 }
+
             } ?: allEndpoints
             @Suppress("UNNECESSARY_SAFE_CALL") val sortedList = filteredList.sortedWith { o1, o2 ->
                 if (o1 == null || o2 == null) {
@@ -128,12 +132,13 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
         EndpointList(
             db = db,
             checker = checker,
-            allEndpoints = currentEndpoints,
+            endpoints = currentEndpoints,
             coroutineScope = coroutineScope,
             onChangeDb = onChangeDb,
             onShowError = {
                 errorText = it
             },
+            search = currentSearch,
             changeCounter = changeCounter
         )
     }
