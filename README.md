@@ -13,3 +13,5 @@ restricted access to (endpoints that aren't reachable outside of certain network
 
 [![Download](https://img.shields.io/badge/download-from_Conveyor-purple?style=for-the-badge&labelColor=blue
 )](https://jpwiedekopf.github.io/cert-checker/download.html)
+
+![Screenshot](./images/screenshot.png)

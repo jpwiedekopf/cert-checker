@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.AnnotatedString
+import com.willowtreeapps.fuzzywuzzy.diffutils.FuzzySearch
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import net.wiedekopf.cert_checker.checker.Checker
@@ -77,9 +78,11 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
         }
 
         LaunchedEffect(allEndpoints, changeCounter, currentSearch, sortMode) {
-            val filteredList = allEndpoints.filter {
-                currentSearch == null || it.name.contains(currentSearch!!, ignoreCase = true)
-            }
+            val filteredList = currentSearch?.let { search ->
+                allEndpoints.filter {
+                    FuzzySearch.partialRatio(search, it.name) > 50
+                }
+            } ?: allEndpoints
             @Suppress("UNNECESSARY_SAFE_CALL") val sortedList = filteredList.sortedWith { o1, o2 ->
                 if (o1 == null || o2 == null) {
                     return@sortedWith 0
@@ -88,12 +91,14 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
                     SortMode.ID -> o1.id.value.compareTo(o2.id.value)
                     SortMode.ALPHABETIC -> o1.name.compareTo(o2.name)
                     SortMode.EXPIRY -> {
-                        val sortAfter1 = o1.details?.firstOrNull()?.notAfter
-                        val sortAfter2 = o2.details?.firstOrNull()?.notAfter
-                        if (sortAfter1 == null || sortAfter2 == null) {
-                            return@sortedWith 0
+                        transaction(db) {
+                            val sortAfter1 = o1.details?.firstOrNull()?.notAfter
+                            val sortAfter2 = o2.details?.firstOrNull()?.notAfter
+                            if (sortAfter1 == null || sortAfter2 == null) {
+                                return@transaction 0
+                            }
+                            sortAfter1.compareTo(sortAfter2)
                         }
-                        sortAfter1.compareTo(sortAfter2)
                     }
                 }
             }

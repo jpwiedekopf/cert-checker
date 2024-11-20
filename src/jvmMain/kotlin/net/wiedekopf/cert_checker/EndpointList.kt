@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -173,14 +174,7 @@ fun ColumnScope.EndpointListContent(
         VerticalScrollbar(
             modifier = Modifier.width(16.dp).padding(4.dp).fillMaxHeight(),
             adapter = rememberScrollbarAdapter(scrollState),
-            style = ScrollbarStyle(
-                minimalHeight = 16.dp,
-                thickness = 4.dp,
-                shape = RoundedCornerShape(8.dp),
-                hoverColor = colorScheme.secondary.copy(alpha = 0.5f),
-                unhoverColor = colorScheme.secondary.copy(alpha = 0.3f),
-                hoverDurationMillis = 1000
-            )
+            style = scrollbarStyle(colorScheme)
         )
     }
 }
@@ -219,7 +213,7 @@ private fun FlowRowScope.EndpointCard(
             }
         )
     }
-    val details by remember(endpointDetailsState) {
+    val detailData by remember(endpointDetailsState) {
         mutableStateOf(
             endpointDetailsState?.let { state ->
                 val lastCheck = endpoint.lastCheck?.toString() ?: buildAnnotatedString {
@@ -250,7 +244,7 @@ private fun FlowRowScope.EndpointCard(
             }
         )
     }
-    Card(modifier = Modifier.padding(4.dp).fillMaxRowHeight().weight(1f)) {
+    Card(modifier = Modifier.padding(4.dp).weight(1f).align(Alignment.CenterVertically)) {
         Text(
             text = buildAnnotatedString {
                 withStyle(SpanStyle(fontSize = MaterialTheme.typography.headlineSmall.fontSize.times(0.7f))) {
@@ -262,11 +256,11 @@ private fun FlowRowScope.EndpointCard(
                 }
             },
             style = TextStyle(textAlign = TextAlign.Center),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            modifier = Modifier.fillMaxWidth().padding(4.dp)
         )
-        details?.let { dets ->
+        detailData?.let { details ->
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                AttributeTable(attributes = dets, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+                AttributeTable(attributes = details, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
                 expiryPercent?.let { expiry ->
                     Column(modifier = Modifier.width(IntrinsicSize.Min)) {
                         CircularProgressIndicator(
@@ -295,9 +289,9 @@ private fun FlowRowScope.EndpointCard(
                 modifier = Modifier.fillMaxWidth().padding(8.dp).fillMaxWidth()
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(20.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -306,8 +300,7 @@ private fun FlowRowScope.EndpointCard(
                     onCheckClick()
                     buttonContentState = ButtonContentState.DONE
                 },
-                modifier = Modifier.width(80.dp),
-                contentPadding = PaddingValues(0.dp)
+                modifier = Modifier.width(80.dp)
             ) {
                 when (buttonContentState) {
                     ButtonContentState.TEXT -> Text("Check")
@@ -320,15 +313,16 @@ private fun FlowRowScope.EndpointCard(
                             )
                         }
                 }
-
             }
             TextButton(
                 onClick = {
                     onClickShowDetails()
-                }
+                },
+                modifier = Modifier.width(160.dp)
             ) {
                 Text("View details")
             }
+
             IconButton(onClick = {
                 onClickDelete()
             }) {
@@ -340,6 +334,7 @@ private fun FlowRowScope.EndpointCard(
 
 @Composable
 private fun ResultDataDialog(endpoint: Endpoint, certificateInfo: String, onDismiss: () -> Unit) {
+    val scrollState = rememberScrollState()
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true, usePlatformDefaultWidth = false)
@@ -349,20 +344,28 @@ private fun ResultDataDialog(endpoint: Endpoint, certificateInfo: String, onDism
             shape = RoundedCornerShape(16.dp),
         ) {
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
             ) {
-                Text("${endpoint.name}:${endpoint.port}", style = MaterialTheme.typography.headlineSmall)
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    SelectionContainer {
+                Text(
+                    "${endpoint.name}:${endpoint.port}",
+                    style = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    SelectionContainer(modifier = Modifier.weight(1f).fillMaxHeight()) {
                         Text(
                             text = certificateInfo,
-                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            modifier = Modifier.fillMaxSize().verticalScroll(scrollState),
                             maxLines = Int.MAX_VALUE,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
                         )
-
                     }
+                    VerticalScrollbar(
+                        adapter = rememberScrollbarAdapter(scrollState),
+                        modifier = Modifier.width(16.dp).fillMaxHeight(),
+                        style = scrollbarStyle(colorScheme)
+                    )
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                     Button(onClick = onDismiss) {
@@ -432,7 +435,7 @@ fun AttributeTable(
                                     append("Unknown")
                                 }
                             }
-                        }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                        }, modifier = Modifier.fillMaxWidth(), maxLines = 5, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -461,3 +464,12 @@ enum class ButtonContentState {
     TEXT,
     DONE
 }
+
+private fun scrollbarStyle(colorScheme: ColorScheme) = ScrollbarStyle(
+    minimalHeight = 16.dp,
+    thickness = 4.dp,
+    shape = RoundedCornerShape(8.dp),
+    hoverColor = colorScheme.secondary.copy(alpha = 0.5f),
+    unhoverColor = colorScheme.secondary.copy(alpha = 0.3f),
+    hoverDurationMillis = 1000
+)

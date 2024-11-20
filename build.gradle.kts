@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "net.wiedekopf"
-version = "1.0.1"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -30,7 +30,7 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation("com.willowtreeapps:fuzzywuzzy-kotlin:0.1.1")
+                implementation("com.willowtreeapps:fuzzywuzzy-kotlin:0.9.0")
             }
         }
         val jvmMain: KotlinSourceSet by getting {

@@ -110,6 +110,17 @@ fun TopUi(
             label = {
                 Text("Hostname")
             },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = colorScheme.primary.copy(alpha = 0.5f))
+                    IconButton(onClick = {
+                        endpointHostname.value = ""
+                        changeSearch("")
+                    }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = colorScheme.error.copy(alpha = 0.5f))
+                    }
+                }
+            },
             modifier = Modifier.weight(0.6f).focusRequester(focusRequester).focusable(),
         )
         TextField(
