@@ -1,12 +1,27 @@
+@file:Suppress("FunctionName")
+
 package net.wiedekopf.cert_checker
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme.colorScheme
+import androidx.compose.material3.MaterialTheme.typography
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.unit.dp
 import com.willowtreeapps.fuzzywuzzy.diffutils.FuzzySearch
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +35,16 @@ private val logger = KotlinLogging.logger {}
 
 @Suppress("FunctionName")
 @Composable
-fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineScope, toggleDarkTheme: () -> Unit, isDarkTheme: Boolean) {
+fun ColumnScope.App(
+    db: Database,
+    checker: Checker,
+    coroutineScope: CoroutineScope,
+    toggleDarkTheme: () -> Unit,
+    isDarkTheme: Boolean,
+    appVersion: String,
+    updateAvailable: Boolean,
+    remoteVersion: String?
+) {
     MaterialTheme {
         var changeCounter by remember {
             mutableStateOf(0)
@@ -33,7 +57,7 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
         var errorText by remember { mutableStateOf<CharSequence?>(null) }
         if (errorText != null) {
             AlertDialog(
-                icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = colorScheme.error) },
                 title = { Text("Error") },
                 text = {
                     when (errorText) {
@@ -129,6 +153,7 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
                 sortMode = SortMode.entries.toTypedArray()[(ordinal + 1) % SortMode.entries.size]
             }
         )
+
         EndpointList(
             db = db,
             checker = checker,
@@ -141,6 +166,38 @@ fun ColumnScope.App(db: Database, checker: Checker, coroutineScope: CoroutineSco
             search = currentSearch,
             changeCounter = changeCounter
         )
+
+        FooterRow(appVersion = appVersion, updateAvailable = updateAvailable, remoteVersion = remoteVersion)
     }
 
+}
+
+@Composable
+fun FooterRow(appVersion: String, updateAvailable: Boolean, remoteVersion: String?) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(colorScheme.primaryContainer),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                append("Version $appVersion")
+                if (updateAvailable) {
+                    append(" - Update available: $remoteVersion")
+                }
+            },
+            modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp),
+            style = typography.bodySmall,
+            color = colorScheme.onPrimaryContainer
+        )
+        if (updateController != null && updateAvailable && canDoOnlineUpdates) {
+            TextButton(
+                onClick = {
+                    updateController.triggerUpdateCheckUI()
+                }
+            ) {
+                Text("Update", color = colorScheme.onPrimaryContainer)
+            }
+        }
+    }
 }

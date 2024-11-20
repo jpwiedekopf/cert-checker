@@ -161,7 +161,7 @@ fun ColumnScope.EndpointListContent(
     createError: (CheckError) -> Unit
 ) {
 
-    Row(modifier = Modifier.fillMaxWidth().weight(1f, fill = true)) {
+    Row(modifier = Modifier.fillMaxWidth().weight(1f, fill = true).padding(bottom = 8.dp)) {
         FlowRow(
             modifier = Modifier.weight(1f).verticalScroll(scrollState).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),

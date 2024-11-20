@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 
 plugins {
@@ -8,7 +10,7 @@ plugins {
 }
 
 group = "net.wiedekopf"
-version = "1.0.3"
+version = "1.0.4"
 
 repositories {
     mavenCentral()
