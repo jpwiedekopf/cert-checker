@@ -1,6 +1,7 @@
 package net.wiedekopf.cert_checker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.LocalContentColor
@@ -65,8 +66,10 @@ fun main() = application {
     }
     val coroutineScope = rememberCoroutineScope()
 
+    val isSystemInDarkTheme = isSystemInDarkTheme()
+
     var isDarkTheme by remember {
-        mutableStateOf(true)
+        mutableStateOf(isSystemInDarkTheme) // default to system theme
     }
 
     val appIcon = remember {
