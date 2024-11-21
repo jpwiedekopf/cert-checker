@@ -248,6 +248,7 @@ private fun FlowRowScope.EndpointCard(
                     "Last check" to lastCheck,
                     "Type" to state.authType,
                     "DN" to state.dn,
+                    "SAN" to state.subjectAlternativeNames?.replace(", ", "\n"),
                     "Not before" to buildAnnotatedString {
                         append(state.notBefore.toString())
                         withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
@@ -263,7 +264,7 @@ private fun FlowRowScope.EndpointCard(
                         }
                     },
                     "Issuer" to endpointDetailsState!!.issuer
-                )
+                ).filter { it.value != null }
             }
         )
     }
@@ -314,7 +315,7 @@ private fun FlowRowScope.EndpointCard(
         }
         Spacer(modifier = Modifier.height(20.dp))
         Row(
-            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -376,7 +377,7 @@ private fun ResultDataDialog(endpoint: Endpoint, certificateInfo: String, onDism
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    SelectionContainer(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    SelectionContainer(modifier = Modifier.fillMaxSize()) {
                         Text(
                             text = certificateInfo,
                             modifier = Modifier.fillMaxSize().verticalScroll(scrollState),
