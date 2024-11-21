@@ -10,13 +10,14 @@ plugins {
 }
 
 group = "net.wiedekopf"
-version = "1.0.6"
+version = "1.0.7"
 
 repositories {
     mavenCentral()
     google()
     maven { url = uri("https://jitpack.io") }
     maven { url = uri("https://maven.pkg.jetbrains.space/public/p/compose/dev") }
+    maven { url = uri("https://packages.jetbrains.team/maven/p/kpm/public/") }
 }
 
 val exposedVersion: String by project
@@ -27,14 +28,13 @@ kotlin {
     jvm {
         withJava()
     }
-    jvmToolchain(21)
+    jvmToolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+        @Suppress("UnstableApiUsage")
+        vendor = JvmVendorSpec.JETBRAINS
+    }
 
     sourceSets {
-        commonMain {
-            dependencies {
-                implementation("com.willowtreeapps:fuzzywuzzy-kotlin:0.9.0")
-            }
-        }
         val jvmMain: KotlinSourceSet by getting {
             dependencies {
                 implementation(kotlin("stdlib-jdk8"))
@@ -56,6 +56,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-core:$ktorVersion")
                 implementation("io.ktor:ktor-client-cio:$ktorVersion")
                 implementation("io.ktor:ktor-client-logging:$ktorVersion")
+                implementation("org.jetbrains.jewel:jewel-int-ui-decorated-window-243:0.26.2")
 
                 // Conveyor API: Manage automatic updates.
                 implementation("dev.hydraulic.conveyor:conveyor-control:1.1")

@@ -45,11 +45,9 @@ fun TopUi(
     onChangeDb: () -> Unit,
     focusRequester: FocusRequester,
     coroutineScope: CoroutineScope,
-    toggleDarkTheme: () -> Unit,
     onClickSort: () -> Unit,
     changeSearch: (String?) -> Unit,
-    sortMode: SortMode,
-    isDarkTheme: Boolean
+    sortMode: SortMode
 ) {
 
     val endpointHostname = remember { mutableStateOf("") }
@@ -223,17 +221,6 @@ fun TopUi(
                 )
             }
 
-        }
-        IconButton(
-            onClick = toggleDarkTheme
-        ) {
-            Icon(
-                imageVector = when (isDarkTheme) {
-                    false -> Icons.Default.DarkMode
-                    true -> Icons.Default.LightMode
-
-                }, contentDescription = "Toggle Dark Mode", tint = colorScheme.inversePrimary
-            )
         }
     }
     when {
