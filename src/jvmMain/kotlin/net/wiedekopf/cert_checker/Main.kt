@@ -4,10 +4,7 @@ package net.wiedekopf.cert_checker
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
@@ -104,7 +101,8 @@ fun main() = application {
     }
 
     val appIcon = remember {
-        System.getProperty("app.dir")?.let { Paths.get(it, "icon-512.png") }?.takeIf { it.exists() }?.inputStream()?.buffered()
+        System.getProperty("app.dir")?.let { Paths.get(it, "icon-512.png") }?.takeIf { it.exists() }?.inputStream()
+            ?.buffered()
             ?.use { BitmapPainter(it.readAllBytes().decodeToImageBitmap()) }
     }
 
@@ -133,7 +131,6 @@ fun main() = application {
     }
 
     val focusRequester = remember { FocusRequester() }
-
 
     val allEndpoints = remember {
         mutableStateListOf<Endpoint>()
@@ -222,7 +219,8 @@ fun main() = application {
                 isDarkTheme = isDarkTheme,
                 appVersion = version,
                 updateAvailable = updateAvailable,
-                remoteVersion = remoteVersion
+                remoteVersion = remoteVersion,
+                appIcon = appIcon
             )
             AppTheme(darkTheme = isDarkTheme) {
                 Column(modifier = Modifier.fillMaxSize().background(colorScheme.surfaceBright)) {
@@ -255,7 +253,12 @@ fun main() = application {
 
 @Composable
 fun DecoratedWindowScope.TitleBarView(
-    toggleDarkTheme: () -> Unit, isDarkTheme: Boolean, appVersion: String, updateAvailable: Boolean, remoteVersion: String?
+    toggleDarkTheme: () -> Unit,
+    isDarkTheme: Boolean,
+    appVersion: String,
+    updateAvailable: Boolean,
+    remoteVersion: String?,
+    appIcon: BitmapPainter?
 ) {
     @Suppress("DuplicatedCode") TitleBar(
         modifier = Modifier.newFullscreenControls(), style = when (isDarkTheme) {
@@ -303,10 +306,13 @@ fun DecoratedWindowScope.TitleBarView(
             }
         ) {
             Row(
-                modifier = Modifier.align(Alignment.Start),
+                modifier = Modifier.align(Alignment.Start).padding(start = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                icon?.let {
+                    Icon(painter = it, contentDescription = null)
+                }
                 Text(
                     text = title, fontWeight = FontWeight.Bold
                 )
