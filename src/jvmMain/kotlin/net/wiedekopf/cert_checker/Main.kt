@@ -207,12 +207,7 @@ fun main() = application {
         DecoratedWindow(
             onCloseRequest = ::exitApplication,
             icon = appIcon,
-            title = buildString {
-                append("Cert Checker")
-                if (version != "Development") {
-                    append(" v$version")
-                }
-            },
+            title = "Cert Checker",
         ) {
             TitleBarView(
                 toggleDarkTheme = toggleDarkTheme,
@@ -299,20 +294,21 @@ fun DecoratedWindowScope.TitleBarView(
             )
         }
     ) {
-        CompositionLocalProvider(
-            LocalContentColor provides when (isDarkTheme) {
+        val contentColor by derivedStateOf {
+            when (isDarkTheme) {
                 true -> onSurfaceDark
                 else -> onSurfaceLight
             }
-        ) {
+        }
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            appIcon?.let {
+                Icon(painter = it, contentDescription = null)
+            }
             Row(
                 modifier = Modifier.align(Alignment.Start).padding(start = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                icon?.let {
-                    Icon(painter = it, contentDescription = null)
-                }
                 Text(
                     text = title, fontWeight = FontWeight.Bold
                 )
@@ -334,10 +330,15 @@ fun DecoratedWindowScope.TitleBarView(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                if (updateController != null && updateAvailable && canDoOnlineUpdates) {
+                if ((updateAvailable && canDoOnlineUpdates) || appVersion == "Development") {
                     TextButton(
+                        enabled = updateController != null && canDoOnlineUpdates,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = contentColor,
+                            disabledContentColor = contentColor.copy(alpha = 0.5f)
+                        ),
                         onClick = {
-                            updateController.triggerUpdateCheckUI()
+                            updateController?.triggerUpdateCheckUI()
                         }) {
                         Text("Update")
                     }
