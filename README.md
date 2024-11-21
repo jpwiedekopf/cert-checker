@@ -15,3 +15,7 @@ restricted access to (endpoints that aren't reachable outside of certain network
 )](https://jpwiedekopf.github.io/cert-checker/download.html)
 
 ![Screenshot](./images/screenshot.png)
+
+> **This project uses the Jewel UI library from Jetbrains, which requires running on the Jetbrains Runtime to customize the top bar.**
+
+When running from the downloaded binary, the JBR is included, so you can run the app without any additional setup.
