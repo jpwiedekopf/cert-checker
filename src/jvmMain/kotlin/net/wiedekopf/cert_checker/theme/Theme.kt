@@ -1,4 +1,5 @@
 package net.wiedekopf.cert_checker.theme
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
