@@ -11,11 +11,9 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.runtime.*
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -34,7 +32,6 @@ import net.wiedekopf.cert_checker.model.EndpointTable
 import net.wiedekopf.cert_checker.model.SortMode
 import net.wiedekopf.cert_checker.theme.*
 import org.jetbrains.compose.resources.ExperimentalResourceApi
-import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -54,10 +51,7 @@ import org.jetbrains.jewel.window.newFullscreenControls
 import org.jetbrains.jewel.window.styling.TitleBarColors
 import org.jetbrains.jewel.window.styling.TitleBarStyle
 import java.nio.file.Path
-import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
-import kotlin.io.path.exists
-import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
 private val logger = KotlinLogging.logger {}
@@ -98,12 +92,6 @@ fun main() = application {
 
     var isDarkTheme by remember {
         mutableStateOf(isSystemInDarkTheme) // default to system theme
-    }
-
-    val appIcon = remember {
-        System.getProperty("app.dir")?.let { Paths.get(it, "icon-512.png") }?.takeIf { it.exists() }?.inputStream()
-            ?.buffered()
-            ?.use { BitmapPainter(it.readAllBytes().decodeToImageBitmap()) }
     }
 
     LaunchedEffect(Unit) {
@@ -206,7 +194,6 @@ fun main() = application {
     ) {
         DecoratedWindow(
             onCloseRequest = ::exitApplication,
-            icon = appIcon,
             title = "Cert Checker",
         ) {
             TitleBarView(
@@ -214,8 +201,7 @@ fun main() = application {
                 isDarkTheme = isDarkTheme,
                 appVersion = version,
                 updateAvailable = updateAvailable,
-                remoteVersion = remoteVersion,
-                appIcon = appIcon
+                remoteVersion = remoteVersion
             )
             AppTheme(darkTheme = isDarkTheme) {
                 Column(modifier = Modifier.fillMaxSize().background(colorScheme.surfaceBright)) {
@@ -252,8 +238,7 @@ fun DecoratedWindowScope.TitleBarView(
     isDarkTheme: Boolean,
     appVersion: String,
     updateAvailable: Boolean,
-    remoteVersion: String?,
-    appIcon: BitmapPainter?
+    remoteVersion: String?
 ) {
     @Suppress("DuplicatedCode") TitleBar(
         modifier = Modifier.newFullscreenControls(), style = when (isDarkTheme) {
@@ -301,9 +286,6 @@ fun DecoratedWindowScope.TitleBarView(
             }
         }
         CompositionLocalProvider(LocalContentColor provides contentColor) {
-            appIcon?.let {
-                Icon(painter = it, contentDescription = null)
-            }
             Row(
                 modifier = Modifier.align(Alignment.Start).padding(start = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
